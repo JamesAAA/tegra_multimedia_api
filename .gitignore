@@ -1,0 +1,8 @@
+samples/common/classes/*.o
+samples/15_zznvcodec/*.o
+samples/15_zznvcodec/*.so
+samples/15_zznvcodec/test_zznvenc
+samples/15_zznvcodec/test_zznvdec
+samples/15_zznvcodec/video_encode
+samples/15_zznvcodec/video_decode
+
