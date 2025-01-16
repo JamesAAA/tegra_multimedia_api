@@ -155,6 +155,10 @@ int zznvcodec_decoder_nonblocking::Start() {
 			mV4L2PixFmt = V4L2_PIX_FMT_AV1;
 			break;
 
+		case ZZNVCODEC_CODEC_TYPE_MJPEG:
+			mV4L2PixFmt = V4L2_PIX_FMT_MJPEG;
+			break;
+
 		default:
 			err = -1;
 			LOGE("%s(%d): unexpected value, mCodecType=%d", __FUNCTION__, __LINE__, mCodecType);
@@ -249,6 +253,7 @@ void zznvcodec_decoder_nonblocking::Stop() {
 void zznvcodec_decoder_nonblocking::SetVideoCompressionBuffer(unsigned char* pBuffer, int nSize, int nFlags, int64_t nTimestamp) {
 	switch(mV4L2PixFmt) {
 	case V4L2_PIX_FMT_AV1:
+	case V4L2_PIX_FMT_MJPEG:
 		EnqueueNalu(pBuffer, nSize, nTimestamp);
 		break;
 
@@ -609,6 +614,18 @@ int zznvcodec_decoder_nonblocking::QueryAndSetCapture() {
 			pix_format = NVBUF_COLOR_FORMAT_NV24;
 		else if (format.fmt.pix_mp.pixelformat  == V4L2_PIX_FMT_NV24_10LE)
 			pix_format = NVBUF_COLOR_FORMAT_NV24_10LE;
+		if (mV4L2PixFmt == V4L2_PIX_FMT_MJPEG)
+		{
+			params.layout = NVBUF_LAYOUT_PITCH;
+			if (format.fmt.pix_mp.pixelformat == V4L2_PIX_FMT_YUV422M)
+			{
+				pix_format = NVBUF_COLOR_FORMAT_YUV422;
+			}
+			else
+			{
+				pix_format = NVBUF_COLOR_FORMAT_YUV420;
+			}
+		}
 
 	    params.colorFormat = pix_format;
 
