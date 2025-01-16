@@ -55,6 +55,7 @@ enum zznvcodec_codec_type_t {
 	ZZNVCODEC_CODEC_TYPE_H264,
 	ZZNVCODEC_CODEC_TYPE_H265,
 	ZZNVCODEC_CODEC_TYPE_AV1,
+	ZZNVCODEC_CODEC_TYPE_MJPEG,
 };
 
 enum zznvcodec_backend_type_t {

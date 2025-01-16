@@ -95,7 +95,7 @@ NvVideoDecoder::setCapturePlaneFormat(uint32_t pixfmt, uint32_t width,
     NvBuffer::NvBufferPlaneFormat planefmts[MAX_PLANES];
 
     if (! ((pixfmt == V4L2_PIX_FMT_NV12M) || (pixfmt == V4L2_PIX_FMT_P010M) || (pixfmt == V4L2_PIX_FMT_YUV422M) ||
-           (pixfmt == V4L2_PIX_FMT_NV24M) || (pixfmt == V4L2_PIX_FMT_NV24_10LE)))
+           (pixfmt == V4L2_PIX_FMT_NV24M) || (pixfmt == V4L2_PIX_FMT_NV24_10LE) || (pixfmt == V4L2_PIX_FMT_YUV420M)))
     {
         COMP_ERROR_MSG("Only NV12M, P010M, YUV422M, NV24M and NV24_10LE is supported");
         return -1;
