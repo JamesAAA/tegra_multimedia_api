@@ -12,7 +12,7 @@ ZZ_INIT_LOG("zznvdec_blocking");
 #define MAX_BUFFERS 64
 
 // #define DIRECT_OUTPUT
-#define MAX_VIDEO_BUFFERS 2
+#define MAX_VIDEO_BUFFERS 12
 
 #define IS_NAL_UNIT_START(buffer_ptr) \
 (!buffer_ptr[0] && !buffer_ptr[1] && \
@@ -21,6 +21,15 @@ ZZ_INIT_LOG("zznvdec_blocking");
 #define IS_NAL_UNIT_START1(buffer_ptr) \
 (!buffer_ptr[0] && !buffer_ptr[1] && \
 (buffer_ptr[2] == 1))
+
+#define GET_H265_NAL_UNIT_TYPE(buffer_ptr, offset) ((buffer_ptr[offset] & 0x7E) >> 1)
+#define GET_H265_FIRST_SLICE_SEGMENT_IN_PIC_FLAG(buffer_ptr, offset) ((buffer_ptr[offset] & 0x80))
+
+// slice
+#define HEVC_NUT_TRAIL_N  0
+#define HEVC_NUT_RASL_R  9
+#define HEVC_NUT_BLA_W_LP  16
+#define HEVC_NUT_CRA_NUT  21
 
 struct Decoded_video_frame_t {
 	int64_t TimeStamp;
@@ -94,7 +103,7 @@ zznvcodec_decoder_blocking::zznvcodec_decoder_blocking() {
 	mFormatWidth = 0;
 	mFormatHeight = 0;
 	mGotEOS = 0;
-	mMaxPreloadBuffers = 2;
+	mMaxPreloadBuffers = MAX_VIDEO_BUFFERS;
 	mPreloadBuffersIndex = 0;
 	mBufferColorFormat = NVBUF_COLOR_FORMAT_INVALID;
 	mV4L2PixFmt = 0;
@@ -342,7 +351,7 @@ void zznvcodec_decoder_blocking::EnqueuePacket(unsigned char* pBuffer, int nSize
 	v4l2_buf.timestamp.tv_usec = (int)(nTimestamp % 1000000);
 
 #if 0
-	LOGD("%s(%d): buffer: index=%d planes[0]:bytesused=%d", __FUNCTION__, __LINE__, buffer->index, buffer->planes[0].bytesused);
+	LOGD("%s(%d): buffer: index=%d planes[0]:bytesused=%d tv_sec=%d tv_usec=%d", __FUNCTION__, __LINE__, buffer->index, buffer->planes[0].bytesused, v4l2_buf.timestamp.tv_sec, v4l2_buf.timestamp.tv_usec);
 	LOGD("%s(%d): [%02X %02X %02X %02X %02X %02X %02X %02X]", __FUNCTION__, __LINE__,
 		(int)((uint8_t*)buffer->planes[0].data)[0], (int)((uint8_t*)buffer->planes[0].data)[1],
 		(int)((uint8_t*)buffer->planes[0].data)[2], (int)((uint8_t*)buffer->planes[0].data)[3],
@@ -358,10 +367,9 @@ void zznvcodec_decoder_blocking::EnqueuePacket(unsigned char* pBuffer, int nSize
 }
 
 void zznvcodec_decoder_blocking::SetVideoCompressionBuffer(unsigned char* pBuffer, int nSize, int nFlags, int64_t nTimestamp) {
-	if (mV4L2PixFmt == V4L2_PIX_FMT_AV1 || mV4L2PixFmt == V4L2_PIX_FMT_MJPEG)
+	if (mV4L2PixFmt == V4L2_PIX_FMT_AV1 || mV4L2PixFmt == V4L2_PIX_FMT_MJPEG) {
 		EnqueuePacket(pBuffer, nSize, nTimestamp);
-	else  // for nalu input (H264 / H265)
-	{
+	} else if (mV4L2PixFmt == V4L2_PIX_FMT_H264) { // for nalu input (H264)
 		// find first NALu
 		int start_bytes;
 		while(nSize > 4) {
@@ -406,6 +414,66 @@ void zznvcodec_decoder_blocking::SetVideoCompressionBuffer(unsigned char* pBuffe
 			nSize = next_size;
 			start_bytes = next_start_bytes;
 		}
+	} else { // for nalu input (H265)
+		mV4L2PixFmt = V4L2_PIX_FMT_H265;
+		// find first NALu
+		int start_bytes;
+		while(nSize > 4) {
+			if(IS_NAL_UNIT_START(pBuffer)) {
+				start_bytes = 4;
+				break;
+			} else if(IS_NAL_UNIT_START1(pBuffer)) {
+				start_bytes = 3;
+				break;
+			}
+
+			pBuffer++;
+			nSize--;
+		}
+		bool bIsSliceHeader = false;
+
+		// find rest of NALu
+		while(true) {
+			unsigned char* next_nalu = pBuffer + start_bytes;
+			int next_size = nSize - start_bytes;
+			int next_start_bytes;
+			while(next_size > 4) {
+				if(IS_NAL_UNIT_START(next_nalu)) {
+					next_start_bytes = 4;
+					break;
+				} else if(IS_NAL_UNIT_START1(next_nalu)) {
+					next_start_bytes = 3;
+					break;
+				}
+
+				next_nalu++;
+				next_size--;
+			}
+			// LOGD("pBuffer[%d] = 0x%2X", start_bytes+2, pBuffer[start_bytes+2]);
+			int h265_nal_unit_type = GET_H265_NAL_UNIT_TYPE(pBuffer, start_bytes);
+			if (((h265_nal_unit_type >= HEVC_NUT_TRAIL_N && h265_nal_unit_type <= HEVC_NUT_RASL_R) ||
+				(h265_nal_unit_type >= HEVC_NUT_BLA_W_LP && h265_nal_unit_type <= HEVC_NUT_CRA_NUT)) &&
+				GET_H265_FIRST_SLICE_SEGMENT_IN_PIC_FLAG(pBuffer, start_bytes+2/*offset to slice header*/)) {
+
+				// LOGD("this is first slice");
+				bIsSliceHeader = true;
+				next_size = 0; // force all left data to enqueue
+
+			}
+
+
+			if(next_size <= 4) {
+				// the last NALu
+				EnqueuePacket(pBuffer, nSize, nTimestamp);
+				break;
+			}
+
+			EnqueuePacket(pBuffer, (int)(next_nalu - pBuffer), nTimestamp);
+			pBuffer = next_nalu;
+			nSize = next_size;
+			start_bytes = next_start_bytes;
+		}
+
 	}
 }
 
@@ -565,9 +633,11 @@ void* zznvcodec_decoder_blocking::DecoderMain() {
 		}
 
 #if 0
-		LOGD("%s(%d): dst_fd=%d planes[%d]={%p %p %p}", __FUNCTION__, __LINE__, dst_fd,
-			oVideoFrame.num_planes, oVideoFrame.planes[0].ptr,
-			oVideoFrame.planes[1].ptr, oVideoFrame.planes[2].ptr);
+		LOGD("%s(%d): dst_fd=%d planes[%d]={%p %p %p} w{%d %d %d} h{%d %d %d} s{%d %d %d}", __FUNCTION__, __LINE__, dst_fd,
+			oVideoFrame.num_planes, oVideoFrame.planes[0].ptr, oVideoFrame.planes[1].ptr, oVideoFrame.planes[2].ptr,
+			oVideoFrame.planes[0].width, oVideoFrame.planes[1].width, oVideoFrame.planes[2].width,
+			oVideoFrame.planes[0].height, oVideoFrame.planes[1].height, oVideoFrame.planes[2].height,
+			oVideoFrame.planes[0].stride, oVideoFrame.planes[1].stride, oVideoFrame.planes[2].stride);
 #endif
 
 		if(! bGotTransError) {
