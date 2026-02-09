@@ -598,7 +598,7 @@ struct zznvcodec_encoder_t {
 		mState = STATE_READY;
 	}
 
-	void SetVideoUncompressionBuffer(zznvcodec_video_frame_t* pFrame, int64_t nTimestamp) {
+	void SetVideoUncompressionBuffer(zznvcodec_video_frame_t* pFrame, int64_t nTimestamp, bool bSetKeyFrame) {
 		if ( pFrame != NULL) {
 			int ret;
 			struct v4l2_buffer v4l2_buf;
@@ -632,6 +632,9 @@ struct zznvcodec_encoder_t {
 
 				mPreloadBuffersIndex++;
 			}
+
+			if(bSetKeyFrame)
+				mEncoder->forceIDR();
 
 			switch(mFormat) {
 			case ZZNVCODEC_PIXEL_FORMAT_YUV420P: {
@@ -801,8 +804,8 @@ struct zznvcodec_encoder_t {
 		}
 	}
 
-	void SetVideoUncompressionBuffer2(zznvcodec_video_frame_t* pFrame, int64_t nTimestamp, unsigned char *pDestBuffer, int *nDestBufferSize, int64_t *nDestTimestamp) {
-		SetVideoUncompressionBuffer(pFrame, nTimestamp);
+	void SetVideoUncompressionBuffer2(zznvcodec_video_frame_t* pFrame, int64_t nTimestamp, unsigned char *pDestBuffer, int *nDestBufferSize, int64_t *nDestTimestamp, bool bSetKeyFrame) {
+		SetVideoUncompressionBuffer(pFrame, nTimestamp, bSetKeyFrame);
 
 #ifdef DIRECT_OUTPUT
 		if (mEncodedFrames[mCurGetIndex].DestBufferSize != 0) {
@@ -846,10 +849,10 @@ void zznvcodec_encoder_stop(zznvcodec_encoder_t* pThis) {
 	return pThis->Stop();
 }
 
-void zznvcodec_encoder_set_video_uncompression_buffer(zznvcodec_encoder_t* pThis, zznvcodec_video_frame_t* pFrame, int64_t nTimestamp) {
-	return pThis->SetVideoUncompressionBuffer(pFrame, nTimestamp);
+void zznvcodec_encoder_set_video_uncompression_buffer(zznvcodec_encoder_t* pThis, zznvcodec_video_frame_t* pFrame, int64_t nTimestamp, bool bSetKeyFrame) {
+	return pThis->SetVideoUncompressionBuffer(pFrame, nTimestamp, bSetKeyFrame);
 }
 
-void zznvcodec_encoder_set_video_uncompression_buffer2(zznvcodec_encoder_t* pThis, zznvcodec_video_frame_t* pFrame, int64_t nTimestamp, unsigned char *pDestBuffer, int *nDestBufferSize, int64_t *nDestTimestamp) {
-	return pThis->SetVideoUncompressionBuffer2(pFrame, nTimestamp, pDestBuffer, nDestBufferSize, nDestTimestamp);
+void zznvcodec_encoder_set_video_uncompression_buffer2(zznvcodec_encoder_t* pThis, zznvcodec_video_frame_t* pFrame, int64_t nTimestamp, unsigned char *pDestBuffer, int *nDestBufferSize, int64_t *nDestTimestamp, bool bSetKeyFrame) {
+	return pThis->SetVideoUncompressionBuffer2(pFrame, nTimestamp, pDestBuffer, nDestBufferSize, nDestTimestamp, bSetKeyFrame);
 }
