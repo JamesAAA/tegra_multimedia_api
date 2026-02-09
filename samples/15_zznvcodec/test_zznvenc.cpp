@@ -273,7 +273,7 @@ int main(int argc, char *argv[])
 
 		nInputCount++;
 
-		zznvcodec_encoder_set_video_uncompression_buffer2(pEnc, &oVideoFrame, i * 1000000L / nFPS, pOutBuffer, &nOutSize, &nOutTimeStamp);
+		zznvcodec_encoder_set_video_uncompression_buffer2(pEnc, &oVideoFrame, i * 1000000L / nFPS, pOutBuffer, &nOutSize, &nOutTimeStamp, false);
 		//usleep(12000);
 #if (defined OutputFile) && (defined DIRECT_OUTPUT)
 		// Direct Output
